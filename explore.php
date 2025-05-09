@@ -57,7 +57,7 @@ $result = $stmt->get_result();
 
 <body class="bg-gray-100 p-6 min-h-screen">
   <div class="max-w-6xl mx-auto">
-    <h1 class="text-3xl font-bold mb-6 text-center">🧬 Avalikud Tegelased</h1>
+    <h1 class="text-3xl font-bold mb-6 text-center">Avalikud Tegelased</h1>
 
     <form method="GET" class="mb-6 max-w-lg mx-auto flex gap-2">
       <input type="text" name="q" value="<?php echo htmlspecialchars($search); ?>" placeholder="Otsi nime või autori järgi..."

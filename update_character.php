@@ -1,75 +1,63 @@
 <?php
-session_start();
 require 'db.php';
+session_start();
 
-if (!isset($_SESSION["user_id"])) {
-    header("Location: index.html");
-    exit();
+$user_id = $_SESSION['user_id'] ?? null;
+if (!$user_id) {
+    die("Not logged in");
 }
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $id = intval($_POST["id"]);
-    $name = $_POST["name"] ?? '';
-    $description = $_POST["description"] ?? '';
-    $template_id = intval($_POST["template_id"] ?? 1);
-    $user_id = $_SESSION["user_id"];
+function json_validate($string) {
+    json_decode($string);
+    return json_last_error() === JSON_ERROR_NONE;
+}
 
-    if ($id > 0 && !empty($name)) {
-        $stmt = $yhendus->prepare("UPDATE characters SET name = ?, description = ?, template_id = ? WHERE id = ? AND user_id = ?");
-        $stmt->bind_param("ssiii", $name, $description, $template_id, $id, $user_id);
-        $stmt->execute();
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $id = intval($_POST['id']);
+    $name = $_POST['name'] ?? '';
+    $description = $_POST['description'] ?? '';
+    $blocks_data = $_POST['blocks_data'] ?? '';
 
-        if (!empty($_FILES["media_file"]["name"])) {
-            $target_dir = "uploads/";
-            if (!file_exists($target_dir)) mkdir($target_dir);
-
-            $old_media = $yhendus->prepare("SELECT file_path FROM media WHERE character_id = ?");
-            $old_media->bind_param("i", $id);
-            $old_media->execute();
-            $res = $old_media->get_result();
-            while ($r = $res->fetch_assoc()) {
-                if (file_exists($r["file_path"])) unlink($r["file_path"]);
-            }
-            $yhendus->query("DELETE FROM media WHERE character_id = $id");
-
-            $filename = time() . "_" . basename($_FILES["media_file"]["name"]);
-            $target_file = $target_dir . $filename;
-            move_uploaded_file($_FILES["media_file"]["tmp_name"], $target_file);
-            $filetype = mime_content_type($target_file);
-
-            $insert = $yhendus->prepare("INSERT INTO media (character_id, file_path, file_type) VALUES (?, ?, ?)");
-            $insert->bind_param("iss", $id, $target_file, $filetype);
-            $insert->execute();
-        }
-
-        if (!empty($_POST["tags"])) {
-            $tag_names = array_map('trim', explode(",", $_POST["tags"]));
-            $yhendus->query("DELETE FROM character_tags WHERE character_id = $id");
-
-            foreach ($tag_names as $tag_name) {
-                if ($tag_name === '') continue;
-
-                $stmt = $yhendus->prepare("INSERT IGNORE INTO tags (name) VALUES (?)");
-                $stmt->bind_param("s", $tag_name);
-                $stmt->execute();
-
-                $stmt = $yhendus->prepare("SELECT id FROM tags WHERE name = ?");
-                $stmt->bind_param("s", $tag_name);
-                $stmt->execute();
-                $tag_id = $stmt->get_result()->fetch_assoc()["id"];
-
-                $stmt = $yhendus->prepare("INSERT IGNORE INTO character_tags (character_id, tag_id) VALUES (?, ?)");
-                $stmt->bind_param("ii", $id, $tag_id);
-                $stmt->execute();
-            }
-        }
-
-        header("Location: dashboard.php");
+    if (empty($blocks_data) || !json_validate($blocks_data)) {
+        echo "<script>alert('Blokkide andmed puuduvad või on vigased!'); history.back();</script>";
         exit();
-    } else {
-        echo "Vigased andmed.";
     }
-} else {
-    echo "Vale päring.";
+
+    $blocks_array = json_decode($blocks_data, true);
+    if (!is_array($blocks_array) || count($blocks_array) < 1) {
+        echo "<script>alert('Peab olema vähemalt 1 plokk!'); history.back();</script>";
+        exit();
+    }
+    if (count($blocks_array) > 15) {
+        echo "<script>alert('Lubatud maksimum on 15 plokki!'); history.back();</script>";
+        exit();
+    }
+
+    $stmt = $yhendus->prepare("SELECT main_image FROM characters WHERE id = ? AND user_id = ?");
+    $stmt->bind_param("ii", $id, $user_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($res->num_rows === 0) {
+        die("Tegelast ei leitud või puudub ligipääs.");
+    }
+
+    $existing = $res->fetch_assoc();
+    $main_image_path = $existing['main_image'];
+
+    if (isset($_FILES['main_image']) && $_FILES['main_image']['error'] === 0) {
+        $targetDir = 'uploads/';
+        if (!file_exists($targetDir)) mkdir($targetDir);
+        $filename = time() . '_' . basename($_FILES['main_image']['name']);
+        $targetFile = $targetDir . $filename;
+        move_uploaded_file($_FILES['main_image']['tmp_name'], $targetFile);
+        $main_image_path = $targetFile;
+    }
+
+    $update = $yhendus->prepare("UPDATE characters SET name = ?, description = ?, main_image = ?, character_blocks = ? WHERE id = ? AND user_id = ?");
+    $update->bind_param("ssssii", $name, $description, $main_image_path, $blocks_data, $id, $user_id);
+    $update->execute();
+
+    header("Location: dashboard.php");
+    exit();
 }
 ?>

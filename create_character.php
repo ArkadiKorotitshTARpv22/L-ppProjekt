@@ -17,6 +17,7 @@ $stmt->bind_param("issi", $user_id, $name, $description, $template_id);
 $stmt->execute();
 $character_id = $stmt->insert_id;
 
+// Upload media file if any
 if (!empty($_FILES["media_file"]["name"])) {
     $target_dir = "uploads/";
     if (!file_exists($target_dir)) mkdir($target_dir);
@@ -31,6 +32,7 @@ if (!empty($_FILES["media_file"]["name"])) {
     $stmt2->execute();
 }
 
+// Handle tags
 if (!empty($_POST["tags"])) {
     $tag_names = array_map('trim', explode(",", $_POST["tags"]));
     foreach ($tag_names as $tag_name) {
